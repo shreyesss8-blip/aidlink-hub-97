@@ -1,136 +1,92 @@
 import { motion } from "framer-motion";
 import { Layout } from "@/components/layout/Layout";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   MapPin,
-  Search,
   Building,
   Package,
-  Droplets,
-  Utensils,
-  Bed,
   Heart,
-  Clock,
-  Users,
-  Navigation,
+  ExternalLink,
+  Phone,
+  Globe,
+  AlertTriangle,
+  Info,
 } from "lucide-react";
-import { useState } from "react";
 
-const shelters = [
+// Real Indian Disaster Relief Organizations
+const reliefOrganizations = [
   {
-    id: 1,
-    name: "Central Community Center",
-    type: "Emergency Shelter",
-    address: "123 Main Street, Downtown",
-    distance: "0.8 miles",
-    capacity: 500,
-    currentOccupancy: 342,
-    amenities: ["Food", "Water", "Medical", "Beds"],
-    status: "open",
-    hours: "24/7",
+    name: "NDRF (National Disaster Response Force)",
+    description: "Primary federal agency for disaster response",
+    website: "https://ndrf.gov.in",
+    phone: "011-24363260",
+    services: ["Search & Rescue", "Medical First Response", "Evacuation"],
   },
   {
-    id: 2,
-    name: "Riverside High School",
-    type: "Emergency Shelter",
-    address: "456 River Road, Eastside",
-    distance: "1.2 miles",
-    capacity: 800,
-    currentOccupancy: 567,
-    amenities: ["Food", "Water", "Beds"],
-    status: "open",
-    hours: "24/7",
+    name: "Indian Red Cross Society",
+    description: "Humanitarian aid and disaster relief",
+    website: "https://indianredcross.org",
+    phone: "011-23716441",
+    services: ["Emergency Shelter", "Medical Aid", "Blood Bank", "Relief Distribution"],
   },
   {
-    id: 3,
-    name: "St. Mary's Church",
-    type: "Relief Center",
-    address: "789 Oak Avenue, Midtown",
-    distance: "2.1 miles",
-    capacity: 200,
-    currentOccupancy: 198,
-    amenities: ["Food", "Water"],
-    status: "limited",
-    hours: "6AM - 10PM",
+    name: "Goonj",
+    description: "Material support and relief distribution",
+    website: "https://goonj.org",
+    phone: "011-41401216",
+    services: ["Clothing", "Essentials", "Rehabilitation"],
   },
   {
-    id: 4,
-    name: "National Guard Armory",
-    type: "Emergency Shelter",
-    address: "321 Military Drive, Northside",
-    distance: "3.5 miles",
-    capacity: 1200,
-    currentOccupancy: 450,
-    amenities: ["Food", "Water", "Medical", "Beds", "Pets"],
-    status: "open",
-    hours: "24/7",
+    name: "Rapid Response",
+    description: "First responder volunteer network",
+    website: "https://rapidresponse.org.in",
+    phone: "1800-121-4848",
+    services: ["Emergency Response", "First Aid", "Search Operations"],
   },
 ];
 
-const supplies = [
+// Real Government Resources
+const governmentResources = [
   {
-    category: "Food & Water",
-    icon: Utensils,
-    items: ["Bottled Water", "Canned Goods", "MREs", "Baby Formula"],
-    availability: "high",
+    name: "NDMA - Disaster Management Plan",
+    description: "Official guidelines and disaster preparedness information",
+    website: "https://ndma.gov.in",
+    icon: Building,
+  },
+  {
+    name: "IMD Weather Alerts",
+    description: "Real-time weather warnings and cyclone tracking",
+    website: "https://mausam.imd.gov.in",
+    icon: Globe,
+  },
+  {
+    name: "CWC Flood Forecasting",
+    description: "River water levels and flood warnings",
+    website: "https://cwc.gov.in",
+    icon: MapPin,
+  },
+  {
+    name: "ISRO Disaster Management",
+    description: "Satellite imagery for disaster monitoring",
+    website: "https://nrsc.gov.in",
+    icon: Globe,
+  },
+];
+
+const essentialSupplies = [
+  {
+    category: "Emergency Kit Essentials",
+    items: ["Drinking Water (3L per person/day)", "Non-perishable food", "First Aid Kit", "Flashlight & Batteries", "Important Documents", "Cash", "Phone Charger"],
+    icon: Package,
   },
   {
     category: "Medical Supplies",
+    items: ["Prescription Medications", "Basic First Aid", "ORS Packets", "Antiseptic", "Face Masks", "Hand Sanitizer"],
     icon: Heart,
-    items: ["First Aid Kits", "Medications", "Bandages", "Sanitizers"],
-    availability: "medium",
-  },
-  {
-    category: "Shelter Items",
-    icon: Bed,
-    items: ["Blankets", "Cots", "Pillows", "Sleeping Bags"],
-    availability: "high",
-  },
-  {
-    category: "Hygiene Products",
-    icon: Droplets,
-    items: ["Toiletries", "Diapers", "Feminine Products", "Soap"],
-    availability: "medium",
   },
 ];
 
 const Resources = () => {
-  const [searchQuery, setSearchQuery] = useState("");
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "open":
-        return "text-success bg-success/20";
-      case "limited":
-        return "text-warning bg-warning/20";
-      case "full":
-        return "text-destructive bg-destructive/20";
-      default:
-        return "text-muted-foreground bg-muted";
-    }
-  };
-
-  const getOccupancyColor = (current: number, max: number) => {
-    const percentage = (current / max) * 100;
-    if (percentage >= 90) return "bg-destructive";
-    if (percentage >= 70) return "bg-warning";
-    return "bg-success";
-  };
-
-  const getAvailabilityColor = (availability: string) => {
-    switch (availability) {
-      case "high":
-        return "text-success";
-      case "medium":
-        return "text-warning";
-      case "low":
-        return "text-destructive";
-      default:
-        return "text-muted-foreground";
-    }
-  };
-
   return (
     <Layout>
       <div className="container mx-auto px-4 py-12">
@@ -144,48 +100,46 @@ const Resources = () => {
             <MapPin className="w-8 h-8 text-primary" />
           </div>
           <h1 className="text-3xl font-bold text-foreground mb-3">
-            Resources & Shelters
+            Disaster Relief Resources
           </h1>
           <p className="text-muted-foreground max-w-2xl mx-auto">
-            Find nearby emergency shelters, relief centers, and supply distribution
-            points. All resources are updated in real-time.
+            Official relief organizations and government resources for disaster preparedness 
+            and response in India.
           </p>
         </motion.div>
 
-        {/* Search */}
+        {/* Important Notice */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="max-w-xl mx-auto mb-12"
+          className="mb-12 card-gradient rounded-xl border border-warning/30 bg-warning/10 p-6"
         >
-          <div className="relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-            <Input
-              placeholder="Search by location, shelter name, or zip code..."
-              className="pl-12 h-14 text-base"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-            <Button className="absolute right-2 top-1/2 -translate-y-1/2" size="sm">
-              <Navigation className="w-4 h-4 mr-2" />
-              Use My Location
-            </Button>
+          <div className="flex items-start gap-4">
+            <Info className="w-6 h-6 text-warning shrink-0 mt-1" />
+            <div>
+              <h3 className="font-semibold text-foreground mb-2">Real-Time Shelter Information</h3>
+              <p className="text-sm text-muted-foreground">
+                For current shelter locations and availability during active disasters, contact your 
+                local District Disaster Management Authority or call the state disaster helpline. 
+                Shelter availability changes rapidly during emergencies.
+              </p>
+            </div>
           </div>
         </motion.div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Shelters List */}
+          {/* Relief Organizations */}
           <div className="lg:col-span-2 space-y-6">
             <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
               <Building className="w-5 h-5 text-primary" />
-              Nearby Shelters
+              Relief Organizations
             </h2>
 
             <div className="space-y-4">
-              {shelters.map((shelter, index) => (
+              {reliefOrganizations.map((org, index) => (
                 <motion.div
-                  key={shelter.id}
+                  key={org.name}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.1 }}
@@ -193,76 +147,84 @@ const Resources = () => {
                 >
                   <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                     <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <h3 className="font-semibold text-foreground text-lg">
-                          {shelter.name}
-                        </h3>
-                        <span
-                          className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(
-                            shelter.status
-                          )}`}
-                        >
-                          {shelter.status.toUpperCase()}
-                        </span>
-                      </div>
+                      <h3 className="font-semibold text-foreground text-lg mb-2">
+                        {org.name}
+                      </h3>
                       <p className="text-sm text-muted-foreground mb-3">
-                        {shelter.type}
+                        {org.description}
                       </p>
 
-                      <div className="space-y-2 text-sm">
+                      <div className="space-y-2 text-sm mb-4">
                         <div className="flex items-center gap-2 text-muted-foreground">
-                          <MapPin className="w-4 h-4" />
-                          <span>{shelter.address}</span>
-                          <span className="text-primary font-medium">
-                            ({shelter.distance})
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <Clock className="w-4 h-4" />
-                          <span>{shelter.hours}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <Users className="w-4 h-4" />
-                          <span>
-                            {shelter.currentOccupancy} / {shelter.capacity} occupancy
-                          </span>
+                          <Phone className="w-4 h-4" />
+                          <span className="text-primary font-medium">{org.phone}</span>
                         </div>
                       </div>
 
-                      {/* Occupancy Bar */}
-                      <div className="mt-3">
-                        <div className="h-2 bg-secondary rounded-full overflow-hidden">
-                          <div
-                            className={`h-full ${getOccupancyColor(
-                              shelter.currentOccupancy,
-                              shelter.capacity
-                            )} transition-all duration-500`}
-                            style={{
-                              width: `${
-                                (shelter.currentOccupancy / shelter.capacity) * 100
-                              }%`,
-                            }}
-                          />
-                        </div>
-                      </div>
-
-                      {/* Amenities */}
-                      <div className="flex flex-wrap gap-2 mt-4">
-                        {shelter.amenities.map((amenity) => (
+                      {/* Services */}
+                      <div className="flex flex-wrap gap-2">
+                        {org.services.map((service) => (
                           <span
-                            key={amenity}
+                            key={service}
                             className="px-2 py-1 bg-secondary rounded-md text-xs text-muted-foreground"
                           >
-                            {amenity}
+                            {service}
                           </span>
                         ))}
                       </div>
                     </div>
 
-                    <Button variant="default" size="sm" className="shrink-0">
-                      <Navigation className="w-4 h-4" />
-                      Get Directions
-                    </Button>
+                    <div className="flex sm:flex-col gap-2">
+                      <Button 
+                        variant="default" 
+                        size="sm"
+                        onClick={() => window.open(`tel:${org.phone.replace(/[^0-9+]/g, "")}`)}
+                      >
+                        <Phone className="w-4 h-4" />
+                        Call
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => window.open(org.website, "_blank")}
+                      >
+                        <ExternalLink className="w-4 h-4" />
+                        Website
+                      </Button>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+
+            {/* Government Resources */}
+            <h2 className="text-xl font-bold text-foreground flex items-center gap-2 pt-6">
+              <Globe className="w-5 h-5 text-primary" />
+              Government Resources
+            </h2>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {governmentResources.map((resource, index) => (
+                <motion.div
+                  key={resource.name}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.1 }}
+                  className="card-gradient rounded-xl border border-border p-5 hover:border-primary/50 transition-all duration-300 cursor-pointer"
+                  onClick={() => window.open(resource.website, "_blank")}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-secondary rounded-lg shrink-0">
+                      <resource.icon className="w-5 h-5 text-primary" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-foreground mb-1">
+                        {resource.name}
+                      </h3>
+                      <p className="text-xs text-muted-foreground">
+                        {resource.description}
+                      </p>
+                    </div>
                   </div>
                 </motion.div>
               ))}
@@ -273,11 +235,11 @@ const Resources = () => {
           <div className="space-y-6">
             <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
               <Package className="w-5 h-5 text-primary" />
-              Supply Status
+              Emergency Preparedness
             </h2>
 
             <div className="space-y-4">
-              {supplies.map((supply, index) => (
+              {essentialSupplies.map((supply, index) => (
                 <motion.div
                   key={supply.category}
                   initial={{ opacity: 0, x: 20 }}
@@ -285,48 +247,45 @@ const Resources = () => {
                   transition={{ delay: index * 0.1 }}
                   className="card-gradient rounded-xl border border-border p-5"
                 >
-                  <div className="flex items-center gap-3 mb-3">
+                  <div className="flex items-center gap-3 mb-4">
                     <div className="p-2 bg-secondary rounded-lg">
                       <supply.icon className="w-5 h-5 text-primary" />
                     </div>
-                    <div className="flex-1">
-                      <h4 className="font-semibold text-foreground">
-                        {supply.category}
-                      </h4>
-                      <span
-                        className={`text-xs font-medium ${getAvailabilityColor(
-                          supply.availability
-                        )}`}
-                      >
-                        {supply.availability.toUpperCase()} AVAILABILITY
-                      </span>
-                    </div>
+                    <h4 className="font-semibold text-foreground">
+                      {supply.category}
+                    </h4>
                   </div>
-                  <div className="flex flex-wrap gap-1">
+                  <ul className="space-y-2">
                     {supply.items.map((item) => (
-                      <span
+                      <li
                         key={item}
-                        className="px-2 py-1 bg-background rounded text-xs text-muted-foreground"
+                        className="text-sm text-muted-foreground flex items-center gap-2"
                       >
+                        <span className="w-1.5 h-1.5 bg-primary rounded-full shrink-0" />
                         {item}
-                      </span>
+                      </li>
                     ))}
-                  </div>
+                  </ul>
                 </motion.div>
               ))}
             </div>
 
-            <div className="card-gradient rounded-xl border border-primary/30 bg-primary/10 p-5">
-              <h4 className="font-semibold text-foreground mb-2">
-                Need Supplies?
-              </h4>
-              <p className="text-sm text-muted-foreground mb-4">
-                Visit any open shelter to receive emergency supplies. Bring ID if
-                available.
-              </p>
-              <Button variant="default" className="w-full">
-                View All Distribution Points
-              </Button>
+            <div className="card-gradient rounded-xl border border-destructive/30 bg-destructive/5 p-5">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="font-semibold text-foreground mb-2">
+                    During Emergency
+                  </h4>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    If you're affected by a disaster, immediately contact:
+                  </p>
+                  <div className="space-y-1 text-sm">
+                    <p className="text-destructive font-bold">112 - National Emergency</p>
+                    <p className="text-muted-foreground">1078 - NDMA Helpline</p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
