@@ -25,6 +25,8 @@ import {
   ShieldCheck,
   ShieldAlert,
   ImageIcon,
+  Plus,
+  Trash2,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -75,6 +77,7 @@ const Report = () => {
   const [referenceId, setReferenceId] = useState("");
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [verificationResult, setVerificationResult] = useState<VerificationResult | null>(null);
+  const [rescueNumbers, setRescueNumbers] = useState<string[]>([""]);
   const [formData, setFormData] = useState({
     type: "",
     severity: "",
@@ -83,7 +86,7 @@ const Report = () => {
     location: "",
     description: "",
     reporterContact: "",
-    rescueCrewNumber: "",
+    victimMessage: "",
     peopleAffected: "",
   });
 
@@ -102,6 +105,24 @@ const Report = () => {
       return "91" + cleaned;
     }
     return cleaned;
+  };
+
+  const addRescueNumber = () => {
+    if (rescueNumbers.length < 5) {
+      setRescueNumbers([...rescueNumbers, ""]);
+    }
+  };
+
+  const removeRescueNumber = (index: number) => {
+    if (rescueNumbers.length > 1) {
+      setRescueNumbers(rescueNumbers.filter((_, i) => i !== index));
+    }
+  };
+
+  const updateRescueNumber = (index: number, value: string) => {
+    const updated = [...rescueNumbers];
+    updated[index] = value;
+    setRescueNumbers(updated);
   };
 
   const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -131,8 +152,6 @@ const Report = () => {
       const base64 = event.target?.result as string;
       setImagePreview(base64);
       setVerificationResult(null);
-      
-      // Auto-verify the image
       await verifyImage(base64);
     };
     reader.readAsDataURL(file);
@@ -144,16 +163,13 @@ const Report = () => {
 
     try {
       const { data, error } = await supabase.functions.invoke("verify-disaster-image", {
-        body: {
-          imageBase64,
-          disasterType: formData.type,
-        },
+        body: { imageBase64, disasterType: formData.type },
       });
 
       if (error) throw error;
 
       setVerificationResult(data);
-      
+
       if (!data.isLegitimate) {
         toast({
           title: "Image Verification Failed",
@@ -168,17 +184,11 @@ const Report = () => {
       }
     } catch (error: any) {
       console.error("Verification error:", error);
-      toast({
-        title: "Verification Error",
-        description: "Could not verify image. You may still submit the report.",
-        variant: "destructive",
-      });
-      // Allow submission even if verification fails
       setVerificationResult({
         isLegitimate: true,
         confidence: "low",
-        reason: "Verification service unavailable",
-        warnings: ["Manual review required"],
+        reason: "Verification service unavailable - proceeding with report",
+        warnings: ["Manual review may be required"],
       });
     } finally {
       setIsVerifying(false);
@@ -196,37 +206,23 @@ const Report = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!imagePreview) {
+    // Validate rescue numbers
+    const validNumbers = rescueNumbers.filter(n => n.trim() && validateIndianMobile(n));
+    
+    if (validNumbers.length === 0) {
       toast({
-        title: "Image Required",
-        description: "Please upload a photo of the disaster for verification.",
+        title: "No Valid Numbers",
+        description: "Please enter at least one valid Indian mobile number.",
         variant: "destructive",
       });
       return;
     }
 
-    if (verificationResult && !verificationResult.isLegitimate) {
+    // Check image verification if image was uploaded
+    if (imagePreview && verificationResult && !verificationResult.isLegitimate) {
       toast({
         title: "Cannot Submit",
-        description: "The uploaded image did not pass verification. Please upload a legitimate disaster photo.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (!formData.rescueCrewNumber) {
-      toast({
-        title: "Rescue Crew Number Required",
-        description: "Please enter the mobile number of the rescue crew to alert.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (!validateIndianMobile(formData.rescueCrewNumber)) {
-      toast({
-        title: "Invalid Mobile Number",
-        description: "Please enter a valid Indian mobile number (10 digits starting with 6-9).",
+        description: "The uploaded image did not pass verification.",
         variant: "destructive",
       });
       return;
@@ -236,34 +232,53 @@ const Report = () => {
 
     try {
       const refId = `DR-IND-${Date.now().toString(36).toUpperCase()}`;
-      
+
+      // Build alert message - include victim's message if provided
       const message = `🚨 DISASTER ALERT 🚨
 Type: ${formData.type.toUpperCase()}
 Severity: ${formData.severity.toUpperCase()}
 Location: ${formData.location}, ${formData.district}, ${formData.state}
 People Affected: ${formData.peopleAffected || "Unknown"}
-Details: ${formData.description}
-Reporter Contact: ${formData.reporterContact || "Not provided"}
-Image Verified: ✓
+${formData.victimMessage ? `\nVICTIM MESSAGE:\n"${formData.victimMessage}"` : ""}
+${formData.description ? `\nDetails: ${formData.description}` : ""}
+Reporter: ${formData.reporterContact || "Not provided"}
+${imagePreview ? "Image: Verified ✓" : "Image: Not provided"}
 Ref: ${refId}
-- India Disaster Response System`;
+- India Disaster Response`;
 
+      // Save to database
+      await supabase.from("disaster_reports").insert({
+        type: formData.type,
+        severity: formData.severity,
+        state: formData.state,
+        district: formData.district,
+        location: formData.location,
+        description: formData.description,
+        people_affected: formData.peopleAffected,
+        reporter_contact: formData.reporterContact,
+        victim_message: formData.victimMessage,
+        image_verified: !!imagePreview && verificationResult?.isLegitimate,
+        reference_id: refId,
+        source: "web",
+        status: "active",
+      });
+
+      // Send SMS to all rescue numbers
       const { data, error } = await supabase.functions.invoke("send-rescue-alert", {
         body: {
-          phoneNumber: formatPhoneNumber(formData.rescueCrewNumber),
+          phoneNumbers: validNumbers.map(formatPhoneNumber),
           message: message,
         },
       });
 
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
 
       setReferenceId(refId);
       setSubmitted(true);
+      
       toast({
         title: "Alert Sent Successfully",
-        description: "Rescue crew has been notified via SMS.",
+        description: `${data.sent}/${data.total} rescue crews notified via SMS.`,
       });
     } catch (error: any) {
       console.error("Error sending alert:", error);
@@ -293,29 +308,33 @@ Ref: ${refId}
               Alert Sent Successfully
             </h1>
             <p className="text-muted-foreground mb-4">
-              SMS alert has been sent to the rescue crew at{" "}
-              <span className="text-primary font-medium">{formData.rescueCrewNumber}</span>
+              SMS alerts have been sent to {rescueNumbers.filter(n => validateIndianMobile(n)).length} rescue crew(s).
             </p>
             <p className="text-sm text-muted-foreground mb-8">
               Reference ID: <span className="font-mono text-primary">{referenceId}</span>
             </p>
             <div className="space-y-4">
-              <Button onClick={() => {
-                setSubmitted(false);
-                setImagePreview(null);
-                setVerificationResult(null);
-                setFormData({
-                  type: "",
-                  severity: "",
-                  state: "",
-                  district: "",
-                  location: "",
-                  description: "",
-                  reporterContact: "",
-                  rescueCrewNumber: "",
-                  peopleAffected: "",
-                });
-              }} variant="outline" size="lg">
+              <Button
+                onClick={() => {
+                  setSubmitted(false);
+                  setImagePreview(null);
+                  setVerificationResult(null);
+                  setRescueNumbers([""]);
+                  setFormData({
+                    type: "",
+                    severity: "",
+                    state: "",
+                    district: "",
+                    location: "",
+                    description: "",
+                    reporterContact: "",
+                    victimMessage: "",
+                    peopleAffected: "",
+                  });
+                }}
+                variant="outline"
+                size="lg"
+              >
                 Submit Another Report
               </Button>
               <p className="text-xs text-muted-foreground">
@@ -345,38 +364,231 @@ Ref: ${refId}
               Report a Disaster
             </h1>
             <p className="text-muted-foreground">
-              Upload a photo for AI verification, then alert rescue crews instantly via SMS.
+              Enter victim's message and alert multiple rescue crews instantly via SMS.
             </p>
           </div>
 
-          {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Image Upload & Verification */}
-            <div className="card-gradient rounded-xl border-2 border-amber-500/50 bg-amber-500/5 p-6 space-y-4">
+            {/* Victim Message - Most Important */}
+            <div className="card-gradient rounded-xl border-2 border-destructive/50 bg-destructive/5 p-6 space-y-4">
               <div className="flex items-center gap-2 mb-2">
-                <Camera className="w-5 h-5 text-amber-500" />
-                <h3 className="font-semibold text-foreground">Photo Verification *</h3>
+                <MessageSquare className="w-5 h-5 text-destructive" />
+                <h3 className="font-semibold text-foreground">Victim's Message</h3>
               </div>
               <p className="text-sm text-muted-foreground">
-                Upload a photo of the disaster. AI will verify it's a legitimate emergency.
+                Enter the message received from the victim (via SMS, call, or in person).
+              </p>
+              <Textarea
+                placeholder="Enter the victim's exact message or description of their situation..."
+                rows={4}
+                value={formData.victimMessage}
+                onChange={(e) => setFormData({ ...formData, victimMessage: e.target.value })}
+                className="text-base"
+              />
+            </div>
+
+            {/* Multiple Rescue Crew Numbers */}
+            <div className="card-gradient rounded-xl border-2 border-primary/50 bg-primary/5 p-6 space-y-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <Phone className="w-5 h-5 text-primary" />
+                  <h3 className="font-semibold text-foreground">Rescue Crew Numbers *</h3>
+                </div>
+                {rescueNumbers.length < 5 && (
+                  <Button type="button" variant="ghost" size="sm" onClick={addRescueNumber}>
+                    <Plus className="w-4 h-4 mr-1" /> Add Number
+                  </Button>
+                )}
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Alert will be sent to all numbers entered below.
+              </p>
+
+              <div className="space-y-3">
+                {rescueNumbers.map((number, index) => (
+                  <div key={index} className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        type="tel"
+                        placeholder={`Rescue crew ${index + 1} (e.g., 9876543210)`}
+                        className="pl-10"
+                        value={number}
+                        onChange={(e) => updateRescueNumber(index, e.target.value)}
+                      />
+                    </div>
+                    {rescueNumbers.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeRescueNumber(index)}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Indian mobile numbers (10 digits starting with 6-9). Add up to 5 numbers.
+              </p>
+            </div>
+
+            {/* Disaster Details */}
+            <div className="card-gradient rounded-xl border border-border p-6 space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="type">Disaster Type *</Label>
+                  <Select
+                    value={formData.type}
+                    onValueChange={(value) => setFormData({ ...formData, type: value })}
+                    required
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {disasterTypes.map((type) => (
+                        <SelectItem key={type} value={type.toLowerCase()}>
+                          {type}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="severity">Severity *</Label>
+                  <Select
+                    value={formData.severity}
+                    onValueChange={(value) => setFormData({ ...formData, severity: value })}
+                    required
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select severity" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {severityLevels.map((level) => (
+                        <SelectItem key={level.value} value={level.value}>
+                          {level.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="state">State *</Label>
+                  <Select
+                    value={formData.state}
+                    onValueChange={(value) => setFormData({ ...formData, state: value })}
+                    required
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select state" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {indianStates.map((state) => (
+                        <SelectItem key={state} value={state}>
+                          {state}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="district">District *</Label>
+                  <Input
+                    id="district"
+                    placeholder="Enter district name"
+                    value={formData.district}
+                    onChange={(e) => setFormData({ ...formData, district: e.target.value })}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="location">Specific Location *</Label>
+                <div className="relative">
+                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    id="location"
+                    placeholder="Landmark, street, area (be as specific as possible)"
+                    className="pl-10"
+                    value={formData.location}
+                    onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="peopleAffected">Estimated People Affected</Label>
+                  <Input
+                    id="peopleAffected"
+                    type="text"
+                    placeholder="e.g., 50-100"
+                    value={formData.peopleAffected}
+                    onChange={(e) => setFormData({ ...formData, peopleAffected: e.target.value })}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="reporterContact">Your Contact Number</Label>
+                  <Input
+                    id="reporterContact"
+                    type="tel"
+                    placeholder="For follow-up if needed"
+                    value={formData.reporterContact}
+                    onChange={(e) => setFormData({ ...formData, reporterContact: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="description">Additional Details</Label>
+                <Textarea
+                  id="description"
+                  placeholder="Any additional information that could help rescue crews..."
+                  rows={3}
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                />
+              </div>
+            </div>
+
+            {/* Optional Image Upload */}
+            <div className="card-gradient rounded-xl border border-border p-6 space-y-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Camera className="w-5 h-5 text-muted-foreground" />
+                <h3 className="font-semibold text-foreground">Photo (Optional)</h3>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Upload a photo if available. Not required - useful when internet is limited.
               </p>
 
               {!imagePreview ? (
-                <div 
-                  className="border-2 border-dashed border-border rounded-lg p-8 text-center cursor-pointer hover:border-primary/50 transition-colors"
+                <div
+                  className="border-2 border-dashed border-border rounded-lg p-6 text-center cursor-pointer hover:border-primary/50 transition-colors"
                   onClick={() => fileInputRef.current?.click()}
                 >
-                  <ImageIcon className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-                  <p className="text-muted-foreground mb-2">Click to upload disaster photo</p>
-                  <p className="text-xs text-muted-foreground">JPG, PNG up to 5MB</p>
+                  <ImageIcon className="w-10 h-10 text-muted-foreground mx-auto mb-2" />
+                  <p className="text-sm text-muted-foreground">Click to upload (optional)</p>
                 </div>
               ) : (
                 <div className="space-y-4">
                   <div className="relative rounded-lg overflow-hidden">
-                    <img 
-                      src={imagePreview} 
-                      alt="Disaster preview" 
-                      className="w-full max-h-64 object-cover"
+                    <img
+                      src={imagePreview}
+                      alt="Disaster preview"
+                      className="w-full max-h-48 object-cover"
                     />
                     <Button
                       type="button"
@@ -389,46 +601,35 @@ Ref: ${refId}
                     </Button>
                   </div>
 
-                  {/* Verification Status */}
                   {isVerifying && (
-                    <div className="flex items-center gap-3 p-4 bg-muted/50 rounded-lg">
-                      <Loader2 className="w-5 h-5 animate-spin text-primary" />
-                      <span className="text-sm">AI is verifying your image...</span>
+                    <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
+                      <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                      <span className="text-sm">Verifying image...</span>
                     </div>
                   )}
 
                   {verificationResult && !isVerifying && (
-                    <div className={`flex items-start gap-3 p-4 rounded-lg ${
-                      verificationResult.isLegitimate 
-                        ? "bg-success/10 border border-success/30" 
-                        : "bg-destructive/10 border border-destructive/30"
-                    }`}>
+                    <div
+                      className={`flex items-start gap-3 p-3 rounded-lg ${
+                        verificationResult.isLegitimate
+                          ? "bg-success/10 border border-success/30"
+                          : "bg-destructive/10 border border-destructive/30"
+                      }`}
+                    >
                       {verificationResult.isLegitimate ? (
-                        <ShieldCheck className="w-5 h-5 text-success flex-shrink-0 mt-0.5" />
+                        <ShieldCheck className="w-4 h-4 text-success flex-shrink-0 mt-0.5" />
                       ) : (
-                        <ShieldAlert className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
+                        <ShieldAlert className="w-4 h-4 text-destructive flex-shrink-0 mt-0.5" />
                       )}
                       <div className="flex-1">
-                        <p className={`font-medium ${
-                          verificationResult.isLegitimate ? "text-success" : "text-destructive"
-                        }`}>
+                        <p
+                          className={`text-sm font-medium ${
+                            verificationResult.isLegitimate ? "text-success" : "text-destructive"
+                          }`}
+                        >
                           {verificationResult.isLegitimate ? "Verified" : "Not Verified"}
-                          {verificationResult.confidence && (
-                            <span className="text-xs ml-2 opacity-70">
-                              ({verificationResult.confidence} confidence)
-                            </span>
-                          )}
                         </p>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          {verificationResult.reason}
-                        </p>
-                        {verificationResult.warnings && verificationResult.warnings.length > 0 && (
-                          <ul className="text-xs text-muted-foreground mt-2 list-disc list-inside">
-                            {verificationResult.warnings.map((w, i) => (
-                              <li key={i}>{w}</li>
-                            ))}
-                          </ul>
-                        )}
+                        <p className="text-xs text-muted-foreground">{verificationResult.reason}</p>
                       </div>
                     </div>
                   )}
@@ -444,217 +645,29 @@ Ref: ${refId}
               />
             </div>
 
-            {/* Rescue Crew Contact */}
-            <div className="card-gradient rounded-xl border-2 border-primary/50 bg-primary/5 p-6 space-y-4">
-              <div className="flex items-center gap-2 mb-2">
-                <MessageSquare className="w-5 h-5 text-primary" />
-                <h3 className="font-semibold text-foreground">SMS Alert Recipient</h3>
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="rescueCrewNumber" className="text-base">
-                  Rescue Crew Mobile Number *
-                </Label>
-                <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    id="rescueCrewNumber"
-                    type="tel"
-                    placeholder="Enter 10-digit mobile number (e.g., 9876543210)"
-                    className="pl-10 text-lg"
-                    value={formData.rescueCrewNumber}
-                    onChange={(e) =>
-                      setFormData({ ...formData, rescueCrewNumber: e.target.value })
-                    }
-                    required
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Indian mobile number where the disaster alert SMS will be sent
-                </p>
-              </div>
-            </div>
-
-            <div className="card-gradient rounded-xl border border-border p-6 space-y-6">
-              {/* Disaster Type */}
-              <div className="space-y-2">
-                <Label htmlFor="type">Disaster Type *</Label>
-                <Select
-                  value={formData.type}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, type: value })
-                  }
-                  required
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select disaster type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {disasterTypes.map((type) => (
-                      <SelectItem key={type} value={type.toLowerCase()}>
-                        {type}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Severity */}
-              <div className="space-y-2">
-                <Label htmlFor="severity">Severity Level *</Label>
-                <Select
-                  value={formData.severity}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, severity: value })
-                  }
-                  required
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select severity level" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {severityLevels.map((level) => (
-                      <SelectItem key={level.value} value={level.value}>
-                        {level.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* State */}
-              <div className="space-y-2">
-                <Label htmlFor="state">State/UT *</Label>
-                <Select
-                  value={formData.state}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, state: value })
-                  }
-                  required
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select state" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {indianStates.map((state) => (
-                      <SelectItem key={state} value={state}>
-                        {state}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* District */}
-              <div className="space-y-2">
-                <Label htmlFor="district">District *</Label>
-                <Input
-                  id="district"
-                  placeholder="Enter district name"
-                  value={formData.district}
-                  onChange={(e) =>
-                    setFormData({ ...formData, district: e.target.value })
-                  }
-                  required
-                />
-              </div>
-
-              {/* Location */}
-              <div className="space-y-2">
-                <Label htmlFor="location">Specific Location *</Label>
-                <div className="relative">
-                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    id="location"
-                    placeholder="Village/Town, Landmark, Address"
-                    className="pl-10"
-                    value={formData.location}
-                    onChange={(e) =>
-                      setFormData({ ...formData, location: e.target.value })
-                    }
-                    required
-                  />
-                </div>
-              </div>
-
-              {/* People Affected */}
-              <div className="space-y-2">
-                <Label htmlFor="peopleAffected">Estimated People Affected</Label>
-                <Input
-                  id="peopleAffected"
-                  type="number"
-                  placeholder="Approximate number"
-                  value={formData.peopleAffected}
-                  onChange={(e) =>
-                    setFormData({ ...formData, peopleAffected: e.target.value })
-                  }
-                />
-              </div>
-
-              {/* Description */}
-              <div className="space-y-2">
-                <Label htmlFor="description">Situation Description *</Label>
-                <Textarea
-                  id="description"
-                  placeholder="Describe the situation in detail - what happened, current conditions, immediate needs..."
-                  rows={4}
-                  value={formData.description}
-                  onChange={(e) =>
-                    setFormData({ ...formData, description: e.target.value })
-                  }
-                  required
-                />
-              </div>
-
-              {/* Reporter Contact */}
-              <div className="space-y-2">
-                <Label htmlFor="reporterContact">Your Contact Number (Optional)</Label>
-                <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    id="reporterContact"
-                    type="tel"
-                    placeholder="Your mobile number for follow-up"
-                    className="pl-10"
-                    value={formData.reporterContact}
-                    onChange={(e) =>
-                      setFormData({ ...formData, reporterContact: e.target.value })
-                    }
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Rescue teams may contact you for additional information
-                </p>
-              </div>
-            </div>
-
-            {/* Submit */}
-            <Button 
-              type="submit" 
-              variant="hero" 
-              size="xl" 
+            {/* Submit Button */}
+            <Button
+              type="submit"
+              variant="hero"
+              size="xl"
               className="w-full"
-              disabled={isLoading || isVerifying || !imagePreview || (verificationResult && !verificationResult.isLegitimate)}
+              disabled={isLoading || isVerifying}
             >
               {isLoading ? (
                 <>
                   <Loader2 className="w-5 h-5 animate-spin" />
-                  Sending Alert...
+                  Sending Alerts...
                 </>
               ) : (
                 <>
                   <Send className="w-5 h-5" />
-                  Send SMS Alert to Rescue Crew
+                  Send Alert to Rescue Crews
                 </>
               )}
             </Button>
 
-            <p className="text-xs text-center text-muted-foreground">
-              For immediate life-threatening emergencies, call{" "}
-              <span className="text-destructive font-semibold">112</span> (National Emergency),{" "}
-              <span className="text-destructive font-semibold">100</span> (Police),{" "}
-              <span className="text-destructive font-semibold">101</span> (Fire),{" "}
-              <span className="text-destructive font-semibold">102</span> (Ambulance)
+            <p className="text-center text-xs text-muted-foreground">
+              For immediate emergencies, call <span className="text-destructive font-bold">112</span>
             </p>
           </form>
         </motion.div>
