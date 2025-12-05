@@ -2,3 +2,6 @@ project_id = "swrycwobaocvbyczzupz"
 
 [functions.send-rescue-alert]
 verify_jwt = false
+
+[functions.verify-disaster-image]
+verify_jwt = false
